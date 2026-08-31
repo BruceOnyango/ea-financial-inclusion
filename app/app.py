@@ -423,6 +423,8 @@ def create_app() -> Dash:
         __name__,
         external_stylesheets=[FONTS],
         title="Financial Inclusion · East Africa",
+        routes_pathname_prefix="/",
+        requests_pathname_prefix="/financial-inclusion/",
     )
     app.layout = build_layout(data.get_results())
     register_callbacks(app)
