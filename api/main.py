@@ -39,6 +39,24 @@ class Respondent(BaseModel):
     job_type: str = Field(examples=["Self employed"])
 
 
+# Friendly WhatsApp labels -> exact training categories (WhatsApp list rows cap at 24 chars)
+LABEL_ALIASES = {
+    "Vocational training": "Vocational/Specialised training",
+    "Other/Don't know": "Other/Dont know/RTA",
+    "Employed Government": "Formally employed Government",
+    "Employed Private": "Formally employed Private",
+    "Refuse to answer": "Dont Know/Refuse to answer",
+}
+
+
+def normalize(record: dict[str, Any]) -> dict[str, Any]:
+    """Map friendly WhatsApp labels back to exact training categories."""
+    return {
+        k: LABEL_ALIASES.get(v, v) if isinstance(v, str) else v
+        for k, v in record.items()
+    }
+
+
 def recommendation(banked: bool) -> str:
     """Plain next step for a field officer, keyed off the verdict."""
     if banked:
