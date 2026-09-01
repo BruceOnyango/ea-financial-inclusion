@@ -53,11 +53,12 @@ def recommendation(banked: bool) -> str:
 
 
 def screen(record: dict[str, Any]) -> dict[str, Any]:
-    """Run one prediction and wrap it for a conversational channel."""
+    record = normalize(record)
     out = predict.predict_one(get_bundle(), record)
     banked = out["label"] == 1
     return {
         "probability": out["probability"],
+        "probability_pct": round(out["probability"] * 100, 1),
         "banked": banked,
         "verdict": out["label_text"],
         "recommendation": recommendation(banked),
