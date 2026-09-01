@@ -34,8 +34,15 @@ def test_predict_ok(monkeypatch, fake_bundle):
     )
     assert r.status_code == 200
     body = r.json()
-    assert set(body) == {"probability", "banked", "verdict", "recommendation"}
+    assert set(body) == {
+        "probability",
+        "probability_pct",
+        "banked",
+        "verdict",
+        "recommendation",
+    }
     assert isinstance(body["banked"], bool)
+    assert body["probability_pct"] == round(body["probability"] * 100, 1)
 
 
 def test_predict_validation_error(monkeypatch, fake_bundle):
@@ -49,6 +56,15 @@ def test_predict_validation_error(monkeypatch, fake_bundle):
 def test_recommendation_both_branches():
     assert "unbanked" in main.recommendation(False).lower()
     assert "already banked" in main.recommendation(True).lower()
+
+
+def test_normalize_maps_long_labels():
+    out = main.normalize(
+        {"job_type": "Employed Government", "country": "Kenya", "household_size": 4}
+    )
+    assert out["job_type"] == "Formally employed Government"  # aliased
+    assert out["country"] == "Kenya"  # passed through
+    assert out["household_size"] == 4  # non-string untouched
 
 
 def test_screen_returns_verdict(monkeypatch, fake_bundle):

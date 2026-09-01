@@ -1,6 +1,6 @@
 # Financial Inclusion in East Africa
 
-![tests](https://img.shields.io/badge/tests-48%20passing-brightgreen)
+![tests](https://img.shields.io/badge/tests-49%20passing-brightgreen)
 ![coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![license](https://img.shields.io/badge/license-MIT-lightgrey)
@@ -163,7 +163,7 @@ This runs the full suite and prints a coverage report to the terminal and to
 `htmlcov/index.html`. Coverage is enforced at **100%** by `--cov-fail-under=100` in
 `pyproject.toml`, so the suite fails if a single line goes uncovered.
 
-**Current status: 48 tests passing, 100% line and branch coverage.**
+**Current status: 49 tests passing, 100% line and branch coverage.**
 
 Open the HTML report:
 
