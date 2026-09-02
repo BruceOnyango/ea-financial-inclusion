@@ -7,12 +7,15 @@
 
 Across Kenya, Rwanda, Tanzania and Uganda, only about **14 in every 100 adults hold a
 bank account**. This project uses survey data to predict who is likely to be excluded,
-shows where the gaps are widest, and serves a live screener through an interactive Dash
-dashboard.
+shows where the gaps are widest, and serves a live screener two ways: an interactive
+Dash dashboard and a JSON prediction API.
 
-The emphasis is a defensible, end to end machine learning workflow: from data
-construction through leakage safe cross validation, honest evaluation under class
-imbalance, and a dashboard where every number on screen is one a unit test verified.
+The winning model is served both through the dashboard and through a FastAPI service,
+the latter wired to a Turn.io WhatsApp journey so a field officer can screen an
+individual over chat. The emphasis throughout is a defensible, end to end machine
+learning workflow: from data construction through leakage safe cross validation, honest
+evaluation under class imbalance, and interfaces where every number shown is one a unit
+test verified.
 
 > **Headline result.** Five classifiers reach near identical accuracy (around 85%),
 > but accuracy is misleading when only 14% of people are banked. Judged on the metrics
@@ -29,8 +32,11 @@ imbalance, and a dashboard where every number on screen is one a unit test verif
 - [Quickstart](#quickstart)
 - [Reproducing the model](#reproducing-the-model)
 - [The dashboard](#the-dashboard)
+- [The prediction API](#the-prediction-api)
+- [WhatsApp screening (Turn.io)](#whatsapp-screening-turnio)
 - [Testing and coverage](#testing-and-coverage)
 - [Project structure](#project-structure)
+- [Deployment](#deployment)
 - [Methodology](#methodology)
 - [Key findings](#key-findings)
 
@@ -95,21 +101,25 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-### 2. Install with dev and dashboard extras
+### 2. Install with the dashboard, API and dev extras
 
 **Windows (PowerShell)**, note the quotes, PowerShell globs the brackets otherwise:
 
 ```powershell
 python -m pip install --upgrade pip setuptools wheel
-pip install -e ".[dev,dash]"
+pip install -e ".[dev,dash,api]"
 ```
 
 **Linux / macOS**
 
 ```bash
 pip install --upgrade pip setuptools wheel
-pip install -e ".[dev,dash]"
+pip install -e ".[dev,dash,api]"
 ```
+
+> **Extras.** `dash` (dashboard), `api` (FastAPI service), `dev` (tests), `deploy`
+> (gunicorn, server only). Install `.[dev,dash,api]` locally; on the server use
+> `.[dash,api,deploy]` since the box does not run tests.
 
 > **Version note.** `scikit-learn` and `imbalanced-learn` are pinned exactly, because a
 > saved model only reloads reliably in the same library version that created it. If you
@@ -129,8 +139,8 @@ bottom performs the full pipeline and writes two artifacts:
 - `artifacts/results.json`, every metric, confusion matrix, ROC curve, and dashboard
   input the app renders.
 
-The dashboard consumes these two files and computes no statistics of its own, so the
-notebook and the app never disagree.
+Both the dashboard and the API consume these files and compute no statistics of their
+own, so the notebook, the app and the API never disagree.
 
 ---
 
@@ -149,11 +159,53 @@ Open **http://127.0.0.1:8050**.
 
 ---
 
+## The prediction API
+
+A FastAPI service exposes the model as JSON so external channels can consume it:
+
+```bash
+uvicorn api.main:app --reload
+```
+
+- `GET /financial-inclusion/api/health` returns the service status and model name.
+- `POST /financial-inclusion/api/predict` takes one respondent's ten attributes and
+  returns the probability, a banked / not banked verdict, and a recommended action.
+- Interactive docs at `/financial-inclusion/api/docs`.
+
+Example:
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/financial-inclusion/api/predict \
+  -H "Content-Type: application/json" \
+  -d '{"country":"Kenya","location_type":"Rural","cellphone_access":"No","household_size":6,"age_of_respondent":24,"gender_of_respondent":"Female","relationship_with_head":"Head of Household","marital_status":"Married/Living together","education_level":"No formal education","job_type":"Farming and Fishing"}'
+```
+
+The API reuses the same model artifact and prediction logic as the dashboard, so both
+channels give identical answers.
+
+---
+
+## WhatsApp screening (Turn.io)
+
+The API is wired to a Turn.io WhatsApp journey. A field officer answers ten quick
+questions in chat; the journey POSTs them to `/predict` and replies in seconds with the
+verdict and a recommended action. The flow is:
+
+```
+WhatsApp  ->  Turn.io journey  ->  prediction API  ->  SVM model  ->  reply
+```
+
+Long category names are shortened to fit WhatsApp's list rows and mapped back to the
+exact training labels server side, so the model always receives values it recognises.
+This puts the model where the audience already is, rather than behind a browser.
+
+---
+
 ## Testing and coverage
 
-The codebase is built test first. I/O boundaries are thin, the model handling and
-figure builders are pure, and a small in process fixture stands in for the real model,
-so the suite runs fully offline and never needs the artifacts to test the logic.
+The codebase is built test first. I/O boundaries are thin, the model handling, figure
+builders and API logic are pure, and a small in process fixture stands in for the real
+model, so the suite runs fully offline and never needs the artifacts to test the logic.
 
 ```bash
 pytest
@@ -187,6 +239,8 @@ xdg-open htmlcov/index.html   # or: open htmlcov/index.html on macOS
 ea-financial-inclusion/
 ├── pyproject.toml              # deps, extras, pytest and coverage config
 ├── README.md
+├── wsgi.py                     # WSGI entry point (Dash, gunicorn)
+├── asgi.py                     # ASGI entry point (API, uvicorn / gunicorn)
 ├── artifacts/
 │   ├── model.joblib            # winning pipeline + threshold + schema
 │   └── results.json            # every number the dashboard renders
@@ -202,12 +256,21 @@ ea-financial-inclusion/
 │   ├── data.py                 # cached artifact access for the view
 │   ├── app.py                  # layout + callbacks (view only)
 │   └── assets/style.css        # hand written dashboard styling
-└── tests/                      # mirrors src/ and app/, fully offline
+├── api/
+│   ├── __init__.py
+│   └── main.py                 # FastAPI /health and /predict
+└── tests/                      # mirrors src/, app/ and api/, fully offline
 ```
 
 **Design principle:** every module pairs a thin I/O boundary with pure functions, and
-the pure functions carry the tests. Model building is separate from evaluation, and
-evaluation is separate from presentation.
+the pure functions carry the tests. Model building is separate from evaluation,
+evaluation is separate from presentation, and the dashboard and API share one model.
+
+---
+
+## Deployment
+
+Live at **https://bruceonyango.link/financial-inclusion**.
 
 ---
 
